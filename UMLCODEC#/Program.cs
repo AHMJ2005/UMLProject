@@ -19,7 +19,7 @@ namespace UMLCODEC_
     {
         public string TransactionId { get; set; }
         public string TransactionType { get; set; }
-        public string Amount { get; set; }
+        public double Amount { get; set; }
         public string Date { get; set; }
         public string UserId { get; set; }
 
