@@ -1,0 +1,11 @@
+﻿# Ignore Visual Studio cache & build
+.vs/
+*/.vs/
+bin/
+obj/
+*/bin/
+*/obj/
+*.user
+*.suo
+*.log
+*.db
