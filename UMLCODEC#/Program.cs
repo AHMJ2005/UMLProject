@@ -300,6 +300,16 @@ namespace UMLCODEC_
                         SandwichCtr++;
                 }
                 int amount = SteakCtr * 8 + SoupCtr * 2 + SandwichCtr * 3;
+                if (Card.Balance >= amount)
+                {
+                    Card.Balance -= amount;
+                    Manager.SaveCard(Card);
+                    Console.WriteLine($"Payment Successful! New Balance: {Card.Balance} JD");
+                }
+                else
+                {
+                    Console.WriteLine("Insufficient card balance!");
+                }
                 Transaction CftriaTransaction = new Transaction();
                 Console.WriteLine("enter Transaction ID");
                 string transactionID = Console.ReadLine();
@@ -325,6 +335,16 @@ namespace UMLCODEC_
                     amount = 3;
                 else if (dest == "SB")
                     amount = 4;
+                if (Card.Balance >= amount)
+                {
+                    Card.Balance -= amount; 
+                    Manager.SaveCard(Card);
+                    Console.WriteLine($"Payment Successful! New Balance: {Card.Balance} JD");
+                }
+                else
+                {
+                    Console.WriteLine("Insufficient card balance!");
+                }
                 Transaction BusTransaction = new Transaction();
                 Console.WriteLine("enter Transaction ID");
                 string transactionId = Console.ReadLine();
