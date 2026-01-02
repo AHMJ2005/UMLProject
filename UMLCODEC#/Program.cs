@@ -137,7 +137,6 @@ namespace UMLCODEC_
         public StudentData? FindStudent(string userId) => GetStudents().FirstOrDefault(s => s.UserId == userId);
         public FacultyData? FindFaculty(string userId) => GetFaculty().FirstOrDefault(f => f.UserId == userId);
 
-        
         public void SaveStudent(StudentData s)
         {
             var students = GetStudents();
@@ -212,7 +211,6 @@ namespace UMLCODEC_
 
         public void RechargeCard()
         {
-            // Use case 1 requires displaying full card info first
             Console.WriteLine(Card.GetDetails());
 
             Console.Write("Enter new balance (recharge amount): ");
@@ -255,7 +253,6 @@ namespace UMLCODEC_
 
         public void RecordLectureAttendance()
         {
-            // Use case 2: display all registered courses
             Console.WriteLine("Your registered courses:");
             foreach (var c in RegisteredCourses) Console.WriteLine("- " + c);
 
@@ -375,7 +372,6 @@ namespace UMLCODEC_
 
         public void PayForBusRide()
         {
-            // 3 tracks (Project.pdf)
             Console.WriteLine("Bus Tracks:");
             Console.WriteLine("1: Track 1 (NB) Northern buildings - 3 JD");
             Console.WriteLine("2: Track 2 (SB) Southern buildings - 4 JD");
@@ -452,7 +448,6 @@ namespace UMLCODEC_
 
         public void AccessCarParking()
         {
-            // Use case 7: display fees and ask hours
             Console.WriteLine("Parking Fees:");
             Console.WriteLine("1st hour: 5 JD");
             Console.WriteLine("2nd hour: 4 JD");
@@ -501,7 +496,6 @@ namespace UMLCODEC_
 
         public void GenerateAttendanceReport()
         {
-            // Use case 8: display taught courses IDs
             Console.WriteLine("Your taught courses:");
             foreach (var c in TaughtCourses) Console.WriteLine("- " + c);
 
@@ -554,22 +548,8 @@ namespace UMLCODEC_
                 var existingStudent = Manager.FindStudent(uid);
                 if (existingStudent == null)
                 {
-                    Console.Write("Student Name: ");
-                    string name = Console.ReadLine() ?? "";
-
-                    Console.Write("Registered courses (comma separated : CPE100,SE400): ");
-                    string line = Console.ReadLine() ?? "";
-                    var courses = line.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                                      .Select(x => x.Trim())
-                                      .Where(x => x.Length > 0)
-                                      .ToList();
-
-                    Manager.SaveStudent(new StudentData
-                    {
-                        UserId = uid,
-                        Name = name,
-                        RegisteredCourses = courses
-                    });
+                    Console.WriteLine(" Cannot issue card: Student ID not found in students");
+                    return;
                 }
             }
             else if (ct == "faculty member")
@@ -577,31 +557,24 @@ namespace UMLCODEC_
                 var existingFaculty = Manager.FindFaculty(uid);
                 if (existingFaculty == null)
                 {
-                    Console.Write("Faculty Name: ");
-                    string name = Console.ReadLine() ?? "";
-
-                    Console.Write("Taught courses (comma separated : CPE100,CIS300): ");
-                    string line = Console.ReadLine() ?? "";
-                    var courses = line.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                                      .Select(x => x.Trim())
-                                      .Where(x => x.Length > 0)
-                                      .ToList();
-
-                    Manager.SaveFaculty(new FacultyData
-                    {
-                        UserId = uid,
-                        Name = name,
-                        TaughtCourses = courses
-                    });
+                    Console.WriteLine("Cannot issue card: Faculty ID not found in faculty");
+                    return;
                 }
             }
             else
             {
-                Console.WriteLine("Invalid Card Type!");
+                Console.WriteLine("Invalid Card Type! Use: student OR faculty member");
                 return;
             }
 
-            //  Save the card
+            var existingCard = Manager.GetCards().FirstOrDefault(c => c.CardNumber == cn);
+            if (existingCard != null)
+            {
+                Console.WriteLine("Card Number already exists! Choose another number.");
+                return;
+            }
+
+            // Save the card
             Manager.SaveCard(new Card
             {
                 CardNumber = cn,
@@ -726,7 +699,6 @@ namespace UMLCODEC_
 
                 var card = manager.GetCards().FirstOrDefault(c => c.CardNumber == cardNum);
 
-                // UI Guidelines limitations: invalid card + blocked card + insufficient balance
                 if (card == null)
                 {
                     Console.WriteLine("Invalid card number!");
