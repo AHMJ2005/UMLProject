@@ -3,107 +3,204 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+
 namespace UMLCODEC_
 {
-
+    // DB Records
     public class Card
     {
-        public string CardNumber { get; set; }
-        public string CardType { get; set; } // Student or Faculty
+        public string CardNumber { get; set; } = "";
+        public string CardType { get; set; } = "";   // "student" or "faculty member"
         public double Balance { get; set; }
-        public string Status { get; set; } // unblocked or blocked
-        public string UserId { get; set; }
+        public string Status { get; set; } = "";     // "unblocked" or "blocked"
+        public string UserId { get; set; } = "";
+
         public string GetDetails() =>
             $"Card #{CardNumber} | Type: {CardType} | Balance: {Balance:F2} JD | Status: {Status} | User: {UserId}";
     }
+
     public class Transaction
     {
+        public string TransactionId { get; set; } = "";
+        public string CardNumber { get; set; } = ""; // REQUIRED by spec
+        public string TransactionType { get; set; } = ""; // "recharge" / "attendance" / "payment"
+        public double? Amount { get; set; } // N/A for attendance
+        public string Date { get; set; } = ""; // yyyy-MM-dd
+        public string UserId { get; set; } = "";
 
-        public string TransactionId { get; set; }
-        public string TransactionType { get; set; }
-        public double Amount { get; set; }
-        public string Date { get; set; }
-        public string UserId { get; set; }
-
-        public string GetDetails() =>
-            $"ID: {TransactionId} | Type: {TransactionType} | Amount: {Amount} | Date: {Date} | User: {UserId}";
+        public string GetDetails()
+        {
+            string amountStr = Amount.HasValue ? Amount.Value.ToString("0.##") : "N/A";
+            return $"ID: {TransactionId} | Card: {CardNumber} | Type: {TransactionType} | Amount: {amountStr} | Date: {Date} | User: {UserId}";
+        }
     }
+
     public class AttendanceRecord
     {
-        public string CourseId { get; set; }
-        public string Date { get; set; }
+        public string CourseId { get; set; } = "";
+        public string Date { get; set; } = "";
         public List<string> AttendeeIds { get; set; } = new List<string>();
     }
-    public class systemManger
+
+    public class StudentData
+    {
+        public string UserId { get; set; } = "";
+        public string Name { get; set; } = "";
+        public List<string> RegisteredCourses { get; set; } = new List<string>();
+    }
+
+    public class FacultyData
+    {
+        public string UserId { get; set; } = "";
+        public string Name { get; set; } = "";
+        public List<string> TaughtCourses { get; set; } = new List<string>();
+    }
+
+    // File-based "Database"
+    public class SystemManager
     {
         private const string CardsFile = "cards.json";
         private const string TransactionsFile = "transactions.json";
         private const string AttendanceFile = "attendance.json";
-        public systemManger()
+        private const string StudentsFile = "students.json";
+        private const string FacultyFile = "faculty.json";
+
+        public SystemManager()
         {
             InitializeFile(CardsFile);
             InitializeFile(TransactionsFile);
             InitializeFile(AttendanceFile);
+            InitializeFile(StudentsFile);
+            InitializeFile(FacultyFile);
+
+            SeedIfFirstRun();
         }
-        private void InitializeFile(string file)
+
+        private static void InitializeFile(string file)
         {
             if (!File.Exists(file))
-            {
                 File.WriteAllText(file, "[]");
-            }
         }
-        private List<T> LoadData<T>(string file)
+
+        private static List<T> LoadData<T>(string file)
         {
-            string Fjson = File.ReadAllText(file);
-            return JsonSerializer.Deserialize<List<T>>(Fjson) ?? new List<T>();
+            string json = File.ReadAllText(file);
+            return JsonSerializer.Deserialize<List<T>>(json) ?? new List<T>();
         }
-        private void SaveData<T>(string file, List<T> data)
+
+        private static void SaveData<T>(string file, List<T> data)
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            string json = JsonSerializer.Serialize(data, options);
-            File.WriteAllText(file, json);
+            var opt = new JsonSerializerOptions { WriteIndented = true };
+            File.WriteAllText(file, JsonSerializer.Serialize(data, opt));
         }
+
+        // ---- Cards ----
         public List<Card> GetCards() => LoadData<Card>(CardsFile);
+
         public void SaveCard(Card card)
         {
             var cards = GetCards();
-            var index = cards.FindIndex(c => c.CardNumber == card.CardNumber);
-
-            if (index != -1) cards[index] = card;
+            int idx = cards.FindIndex(c => c.CardNumber == card.CardNumber);
+            if (idx != -1) cards[idx] = card;
             else cards.Add(card);
-
             SaveData(CardsFile, cards);
         }
+
+        // ---- Transactions ----
         public List<Transaction> GetTransactions() => LoadData<Transaction>(TransactionsFile);
+
         public void AddTransaction(Transaction tr)
         {
             var trs = GetTransactions();
             trs.Add(tr);
             SaveData(TransactionsFile, trs);
         }
+
+        // ---- Attendance ----
         public List<AttendanceRecord> GetAttendance() => LoadData<AttendanceRecord>(AttendanceFile);
+
         public void SaveAttendance(AttendanceRecord record)
         {
             var records = GetAttendance();
-            var index = records.FindIndex(r => r.CourseId == record.CourseId && r.Date == record.Date);
+            int idx = records.FindIndex(r => r.CourseId == record.CourseId && r.Date == record.Date);
 
-            if (index != -1)
-                records[index] = record;
-            else
-                records.Add(record);
+            if (idx != -1) records[idx] = record;
+            else records.Add(record);
 
             SaveData(AttendanceFile, records);
         }
 
+        // ---- Students & Faculty ----
+        public List<StudentData> GetStudents() => LoadData<StudentData>(StudentsFile);
+        public List<FacultyData> GetFaculty() => LoadData<FacultyData>(FacultyFile);
+
+        public StudentData? FindStudent(string userId) => GetStudents().FirstOrDefault(s => s.UserId == userId);
+        public FacultyData? FindFaculty(string userId) => GetFaculty().FirstOrDefault(f => f.UserId == userId);
+
+        
+        public void SaveStudent(StudentData s)
+        {
+            var students = GetStudents();
+            int idx = students.FindIndex(x => x.UserId == s.UserId);
+            if (idx != -1) students[idx] = s;
+            else students.Add(s);
+            SaveData(StudentsFile, students);
+        }
+
+        public void SaveFaculty(FacultyData f)
+        {
+            var faculty = GetFaculty();
+            int idx = faculty.FindIndex(x => x.UserId == f.UserId);
+            if (idx != -1) faculty[idx] = f;
+            else faculty.Add(f);
+            SaveData(FacultyFile, faculty);
+        }
+
+        private void SeedIfFirstRun()
+        {
+            // If students file is empty => first run => load everything as required
+            if (GetStudents().Count > 0 || GetFaculty().Count > 0 || GetCards().Count > 0)
+                return;
+
+            // data loaded students
+            var students = new List<StudentData>
+            {
+                new StudentData { UserId="S01", Name="Ali",   RegisteredCourses=new List<string>{"CPE100","SE400"} },
+                new StudentData { UserId="S02", Name="Omar",  RegisteredCourses=new List<string>{"CPE100","NES200"} },
+                new StudentData { UserId="S03", Name="Reem",  RegisteredCourses=new List<string>{"NES200","CIS300","SE400"} },
+                new StudentData { UserId="S04", Name="Maher", RegisteredCourses=new List<string>{"CPE100","SE400"} },
+            };
+            SaveData(StudentsFile, students);
+
+            // loaded data faculty
+            var faculty = new List<FacultyData>
+            {
+                new FacultyData { UserId="F01", Name="Sami", TaughtCourses=new List<string>{"CPE100","CIS300"} },
+                new FacultyData { UserId="F02", Name="Eman", TaughtCourses=new List<string>{"NES200","SE400"} },
+            };
+            SaveData(FacultyFile, faculty);
+
+            // loaded data cards
+            var cards = new List<Card>
+            {
+                new Card { CardNumber="10", Balance=80,  CardType="faculty member", Status="unblocked", UserId="F02" },
+                new Card { CardNumber="20", Balance=110, CardType="student",        Status="unblocked", UserId="S02" },
+                new Card { CardNumber="30", Balance=95,  CardType="student",        Status="blocked",   UserId="S03" },
+                new Card { CardNumber="40", Balance=160, CardType="student",        Status="unblocked", UserId="S04" },
+            };
+            SaveData(CardsFile, cards);
+        }
     }
+
+    // Domain Users
     public abstract class User
     {
-        public string UserId { get; set; }
-        public string Name { get; set; }
+        public string UserId { get; }
+        public string Name { get; }
         protected Card Card;
-        protected systemManger Manager;
+        protected SystemManager Manager;
 
-        protected User(string userId, string name, Card card, systemManger manager)
+        protected User(string userId, string name, Card card, SystemManager manager)
         {
             UserId = userId;
             Name = name;
@@ -111,22 +208,34 @@ namespace UMLCODEC_
             Manager = manager;
         }
 
-        public bool Login()
-        {
-            return Card.Status == "unblocked";
-        }
+        public bool LoginAllowed() => Card.Status == "unblocked";
 
-        public void RechargeCard(double amount, string transactionId)
+        public void RechargeCard()
         {
-            if (amount <= 0) return;
+            // Use case 1 requires displaying full card info first
+            Console.WriteLine(Card.GetDetails());
 
+            Console.Write("Enter new balance (recharge amount): ");
+            if (!double.TryParse(Console.ReadLine(), out double amount) || amount <= 0)
+            {
+                Console.WriteLine("Invalid amount.");
+                return;
+            }
+
+            double old = Card.Balance;
             Card.Balance += amount;
             Manager.SaveCard(Card);
 
+            Console.WriteLine($"Updated Balance = old({old:F2}) + new({amount:F2}) = {Card.Balance:F2} JD");
+
+            Console.Write("Enter transaction ID: ");
+            string tid = Console.ReadLine() ?? "";
+
             Manager.AddTransaction(new Transaction
             {
-                TransactionId = transactionId,
-                TransactionType = "Recharge",
+                TransactionId = tid,
+                CardNumber = Card.CardNumber,
+                TransactionType = "recharge",
                 Amount = amount,
                 Date = DateTime.Now.ToString("yyyy-MM-dd"),
                 UserId = UserId
@@ -134,70 +243,230 @@ namespace UMLCODEC_
         }
     }
 
-
-    public class Administrator
+    public class Student : User
     {
-        private systemManger Manager;
+        public List<string> RegisteredCourses { get; }
 
-        public Administrator(systemManger manager)
+        public Student(string userId, string name, Card card, SystemManager manager, List<string> registeredCourses)
+            : base(userId, name, card, manager)
         {
-            Manager = manager;
+            RegisteredCourses = registeredCourses;
         }
 
-        public void IssueCard(string cardNumber, string cardType, string userId)
+        public void RecordLectureAttendance()
         {
-            Manager.SaveCard(new Card
+            // Use case 2: display all registered courses
+            Console.WriteLine("Your registered courses:");
+            foreach (var c in RegisteredCourses) Console.WriteLine("- " + c);
+
+            Console.Write("Enter Course ID: ");
+            string courseId = Console.ReadLine() ?? "";
+
+            if (!RegisteredCourses.Contains(courseId))
             {
-                CardNumber = cardNumber,
-                CardType = cardType,
-                Balance = 50,
-                Status = "unblocked",
-                UserId = userId
+                Console.WriteLine("Couldn't find the course in your registered courses.");
+                return;
+            }
+
+            Console.Write("Enter Date (yyyy-MM-dd): ");
+            string date = Console.ReadLine() ?? "";
+
+            var record = Manager.GetAttendance()
+                .FirstOrDefault(r => r.CourseId == courseId && r.Date == date);
+
+            if (record != null)
+            {
+                if (!record.AttendeeIds.Contains(UserId))
+                    record.AttendeeIds.Add(UserId);
+            }
+            else
+            {
+                record = new AttendanceRecord
+                {
+                    CourseId = courseId,
+                    Date = date,
+                    AttendeeIds = new List<string> { UserId }
+                };
+            }
+
+            Manager.SaveAttendance(record);
+
+            Console.Write("Enter transaction ID: ");
+            string tid = Console.ReadLine() ?? "";
+
+            Manager.AddTransaction(new Transaction
+            {
+                TransactionId = tid,
+                CardNumber = Card.CardNumber,
+                TransactionType = "attendance",
+                Amount = null, // N/A
+                Date = date,
+                UserId = UserId
+            });
+
+            Console.WriteLine("Attendance recorded successfully.");
+        }
+
+        public void PayForCafeteria()
+        {
+            // Full menu
+            var menu = new Dictionary<int, (string Name, int Price)>
+            {
+                {1, ("Steak", 8)},
+                {2, ("Soup", 2)},
+                {3, ("Sandwich", 3)},
+                {4, ("Salad", 4)},
+                {5, ("Tea", 2)},
+                {6, ("Juice", 3)},
+                {7, ("Cake", 5)},
+                {8, ("Water", 1)},
+            };
+
+            Console.WriteLine("[CAFETERIA MENU]");
+            foreach (var kv in menu)
+                Console.WriteLine($"{kv.Key}:{kv.Value.Name} ({kv.Value.Price} JD)");
+
+            int total = 0;
+
+            Console.Write("Enter an item or 0 to end order: ");
+            while (int.TryParse(Console.ReadLine(), out int choice) && choice != 0)
+            {
+                if (menu.ContainsKey(choice))
+                {
+                    total += menu[choice].Price;
+                }
+                else
+                {
+                    Console.WriteLine("Invalid item.");
+                }
+
+                Console.Write("Enter an item or 0 to end order: ");
+            }
+
+            if (total == 0)
+            {
+                Console.WriteLine("No items selected.");
+                return;
+            }
+
+            if (Card.Balance < total)
+            {
+                Console.WriteLine("Insufficient card balance!");
+                return;
+            }
+
+            Card.Balance -= total;
+            Manager.SaveCard(Card);
+            Console.WriteLine($"Payment Successful! New Balance: {Card.Balance:F2} JD");
+
+            Console.Write("Enter transaction ID: ");
+            string tid = Console.ReadLine() ?? "";
+
+            Manager.AddTransaction(new Transaction
+            {
+                TransactionId = tid,
+                CardNumber = Card.CardNumber,
+                TransactionType = "payment",
+                Amount = total,
+                Date = DateTime.Now.ToString("yyyy-MM-dd"),
+                UserId = UserId
             });
         }
 
-        public void BlockCard(string cardNumber)
+        public void PayForBusRide()
         {
-            var card = Manager.GetCards().FirstOrDefault(c => c.CardNumber == cardNumber);
-            if (card == null) return;
+            // 3 tracks (Project.pdf)
+            Console.WriteLine("Bus Tracks:");
+            Console.WriteLine("1: Track 1 (NB) Northern buildings - 3 JD");
+            Console.WriteLine("2: Track 2 (SB) Southern buildings - 4 JD");
+            Console.WriteLine("3: Track 3 (LIB) Library - 5 JD");
 
-            card.Status = "blocked";
-            Manager.SaveCard(card);
+            Console.Write("Enter track (1/2/3) or shortcut (NB/SB/LIB): ");
+            string input = (Console.ReadLine() ?? "").Trim().ToUpper();
+
+            int amount = input switch
+            {
+                "1" or "NB" => 3,
+                "2" or "SB" => 4,
+                "3" or "LIB" => 5,
+                _ => 0
+            };
+
+            if (amount == 0)
+            {
+                Console.WriteLine("Invalid track.");
+                return;
+            }
+
+            if (Card.Balance < amount)
+            {
+                Console.WriteLine("Insufficient card balance!");
+                return;
+            }
+
+            Card.Balance -= amount;
+            Manager.SaveCard(Card);
+            Console.WriteLine($"Payment Successful! New Balance: {Card.Balance:F2} JD");
+
+            Console.Write("Enter transaction ID: ");
+            string tid = Console.ReadLine() ?? "";
+
+            Manager.AddTransaction(new Transaction
+            {
+                TransactionId = tid,
+                CardNumber = Card.CardNumber,
+                TransactionType = "payment",
+                Amount = amount,
+                Date = DateTime.Now.ToString("yyyy-MM-dd"),
+                UserId = UserId
+            });
         }
 
-        public void UnblockCard(string cardNumber)
+        public void ViewTransactionHistory()
         {
-            var card = Manager.GetCards().FirstOrDefault(c => c.CardNumber == cardNumber);
-            if (card == null) return;
+            var sorted = Manager.GetTransactions()
+                .Where(t => t.UserId == UserId)
+                .OrderBy(t => t.TransactionType)
+                .ToList();
 
-            card.Status = "unblocked";
-            Manager.SaveCard(card);
-        }
+            if (sorted.Count == 0)
+            {
+                Console.WriteLine("No transactions found.");
+                return;
+            }
 
-        public List<Card> ViewAllCards()
-        {
-            return Manager.GetCards().OrderBy(c => c.CardType).ToList();
-        }
-
-        public List<Transaction> ViewAllTransactions()
-        {
-            return Manager.GetTransactions().OrderBy(t => t.TransactionType).ToList();
+            foreach (var tr in sorted)
+                Console.WriteLine(tr.GetDetails());
         }
     }
 
-
     public class FacultyMember : User
     {
-        public List<string> TaughtCourses { get; set; } = new();
+        public List<string> TaughtCourses { get; }
 
-        public FacultyMember(string userId, string name, Card card, systemManger manager)
+        public FacultyMember(string userId, string name, Card card, SystemManager manager, List<string> taughtCourses)
             : base(userId, name, card, manager)
         {
+            TaughtCourses = taughtCourses;
         }
 
-        public void AccessCarParking(int hours, string transactionId)
+        public void AccessCarParking()
         {
-            if (hours <= 0) return;
+            // Use case 7: display fees and ask hours
+            Console.WriteLine("Parking Fees:");
+            Console.WriteLine("1st hour: 5 JD");
+            Console.WriteLine("2nd hour: 4 JD");
+            Console.WriteLine("3rd hour: 3 JD");
+            Console.WriteLine("4th hour: 2 JD");
+            Console.WriteLine("5th hour: 1 JD");
+            Console.WriteLine("Above 5 hours: Free");
+
+            Console.Write("Enter number of hours: ");
+            if (!int.TryParse(Console.ReadLine(), out int hours) || hours <= 0)
+            {
+                Console.WriteLine("Invalid hours.");
+                return;
+            }
 
             int[] fees = { 5, 4, 3, 2, 1 };
             double cost = 0;
@@ -205,364 +474,332 @@ namespace UMLCODEC_
             for (int i = 0; i < hours && i < 5; i++)
                 cost += fees[i];
 
-            if (Card.Balance < cost) return;
+            if (Card.Balance < cost)
+            {
+                Console.WriteLine("Insufficient card balance!");
+                return;
+            }
 
             Card.Balance -= cost;
             Manager.SaveCard(Card);
 
+            Console.WriteLine($"Payment Successful! Cost: {cost:F2} JD | New Balance: {Card.Balance:F2} JD");
+
+            Console.Write("Enter transaction ID: ");
+            string tid = Console.ReadLine() ?? "";
+
             Manager.AddTransaction(new Transaction
             {
-                TransactionId = transactionId,
-                TransactionType = "Payment",
+                TransactionId = tid,
+                CardNumber = Card.CardNumber,
+                TransactionType = "payment",
                 Amount = cost,
                 Date = DateTime.Now.ToString("yyyy-MM-dd"),
                 UserId = UserId
             });
         }
 
-        public List<string> GenerateAttendanceReport(string courseId, string date)
+        public void GenerateAttendanceReport()
         {
+            // Use case 8: display taught courses IDs
+            Console.WriteLine("Your taught courses:");
+            foreach (var c in TaughtCourses) Console.WriteLine("- " + c);
+
+            Console.Write("Enter Course ID: ");
+            string courseId = Console.ReadLine() ?? "";
             if (!TaughtCourses.Contains(courseId))
-                return new List<string>();
+            {
+                Console.WriteLine("This course is not in your taught courses.");
+                return;
+            }
+
+            Console.Write("Enter Date (yyyy-MM-dd): ");
+            string date = Console.ReadLine() ?? "";
 
             var record = Manager.GetAttendance()
                 .FirstOrDefault(r => r.CourseId == courseId && r.Date == date);
 
-            return record == null ? new List<string>() : record.AttendeeIds;
+            if (record == null || record.AttendeeIds.Count == 0)
+            {
+                Console.WriteLine("Attendees: (none)");
+                return;
+            }
+
+            Console.WriteLine("Attendees: " + string.Join(", ", record.AttendeeIds));
         }
-        public class Student : User
+    }
+
+    public class Administrator
+    {
+        private SystemManager Manager;
+
+        public Administrator(SystemManager manager)
         {
-            public Student(string userId, string name, Card card, systemManger manager)
-              : base(userId, name, card, manager) { }
-            public List<string> RegisteredCourses { get; set; } = new List<string>();
-
-            public void RecordLectureAttendance(string CourseID, string date)
-            {
-                foreach (string RegCourse in RegisteredCourses)
-                    Console.WriteLine("-" + RegCourse);
-
-                if (!RegisteredCourses.Contains(CourseID))
-                    Console.WriteLine("Couldn't find the course in your Registerd Courses");
-
-                List<AttendanceRecord> allRecords = Manager.GetAttendance();
-                AttendanceRecord record = allRecords.FirstOrDefault(r => r.CourseId == CourseID && r.Date == date);
-
-                if (record != null)
-                {
-                    if (!record.AttendeeIds.Contains(UserId)) //just to prevent the duplication
-                        record.AttendeeIds.Add(UserId);
-                }
-                else
-                {
-                    record = new AttendanceRecord();
-                    record.CourseId = CourseID;
-                    record.Date = date;
-                    record.AttendeeIds = new List<string>();
-                    record.AttendeeIds.Add(UserId);
-                }
-                Manager.SaveAttendance(record);
-
-                Transaction RcrdTransaction = new Transaction();
-                Console.WriteLine("enter transactionId for the Lecture Record");
-                string transactionId = Console.ReadLine();
-                RcrdTransaction.TransactionId = transactionId;
-                RcrdTransaction.TransactionType = "attendance";
-                RcrdTransaction.Amount = 0;
-                RcrdTransaction.Date = date;
-                RcrdTransaction.UserId = this.UserId;
-                Manager.AddTransaction(RcrdTransaction);
-
-            }
-            public void PayforCafteria(string date)
-            {
-                Console.WriteLine("1:Steak (8 JD)    2:Soup(2 JD)    3:Sandwich(3 JD)");
-                int SteakCtr = 0;
-                int SoupCtr = 0;
-                int SandwichCtr = 0;
-
-                Console.WriteLine("enter your choice from the menu or 0 to end order");
-                int MenuChoice = Convert.ToInt32(Console.ReadLine());
-                if (MenuChoice == 1)
-                    SteakCtr++;
-                else if (MenuChoice == 2)
-                    SoupCtr++;
-                else if (MenuChoice == 3)
-                    SandwichCtr++;
-                while (MenuChoice != 0)
-                {
-                    Console.WriteLine("enter your choice from the menu or 0 to end order");
-                    MenuChoice = Convert.ToInt32(Console.ReadLine());
-                    if (MenuChoice == 1)
-                        SteakCtr++;
-                    else if (MenuChoice == 2)
-                        SoupCtr++;
-                    else if (MenuChoice == 3)
-                        SandwichCtr++;
-                }
-                int amount = SteakCtr * 8 + SoupCtr * 2 + SandwichCtr * 3;
-                if (Card.Balance >= amount)
-                {
-                    Card.Balance -= amount;
-                    Manager.SaveCard(Card);
-                    Console.WriteLine($"Payment Successful! New Balance: {Card.Balance} JD");
-                }
-                else
-                {
-                    Console.WriteLine("Insufficient card balance!");
-                }
-                Transaction CftriaTransaction = new Transaction();
-                Console.WriteLine("enter Transaction ID");
-                string transactionID = Console.ReadLine();
-                CftriaTransaction.TransactionId = transactionID;
-                CftriaTransaction.TransactionType = "payment";
-                CftriaTransaction.Amount = amount;
-                CftriaTransaction.Date = date;
-                CftriaTransaction.UserId = this.UserId;
-
-                Manager.AddTransaction(CftriaTransaction);
-
-
-            }
-
-            public void PayforBus(string date)
-
-            {
-                Console.WriteLine("NB: North Buildings    SB: South Buildings");
-                Console.WriteLine("enter a destination: ");
-                string dest = Console.ReadLine();
-                int amount = 0;
-                if (dest == "NB")
-                    amount = 3;
-                else if (dest == "SB")
-                    amount = 4;
-                if (Card.Balance >= amount)
-                {
-                    Card.Balance -= amount; 
-                    Manager.SaveCard(Card);
-                    Console.WriteLine($"Payment Successful! New Balance: {Card.Balance} JD");
-                }
-                else
-                {
-                    Console.WriteLine("Insufficient card balance!");
-                }
-                Transaction BusTransaction = new Transaction();
-                Console.WriteLine("enter Transaction ID");
-                string transactionId = Console.ReadLine();
-                BusTransaction.Amount = amount;
-                BusTransaction.TransactionType = "payment";
-                BusTransaction.TransactionId = transactionId;
-                BusTransaction.Date = date;
-                BusTransaction.UserId = this.UserId;
-
-                Manager.AddTransaction(BusTransaction);
-            }
-
-            public void ViewTransactionHistory()
-            {
-                List<Transaction> AllTransactions = Manager.GetTransactions();
-                List<Transaction> StudentTr = new List<Transaction>();
-                foreach (Transaction tr in AllTransactions)
-                {
-                    if (tr.UserId == this.UserId)
-                        StudentTr.Add(tr);
-                }
-                List<Transaction> SortedStudentTr = StudentTr.OrderBy(t => t.TransactionType).ToList();
-
-                foreach (Transaction tr in SortedStudentTr)
-                {
-                    Console.WriteLine(tr.GetDetails());
-                }
-            }
+            Manager = manager;
         }
 
-        internal class Program
+        public void IssueCard()
         {
-            static void Main(string[] args)
+            Console.Write("Card Number: ");
+            string cn = Console.ReadLine() ?? "";
+
+            Console.Write("Card Type (student / faculty member): ");
+            string ct = (Console.ReadLine() ?? "").Trim().ToLower();
+
+            Console.Write("User ID: ");
+            string uid = Console.ReadLine() ?? "";
+
+            if (ct == "student")
             {
-                systemManger manager = new systemManger();
-                Administrator admin = new Administrator(manager);
-
-                while (true)
+                var existingStudent = Manager.FindStudent(uid);
+                if (existingStudent == null)
                 {
-                    // [Main Login Screen]
-                    Console.Clear();
-                    Console.WriteLine("=== Smart University Card System ===");
-                    Console.WriteLine("[1] Login As Admin");
-                    Console.WriteLine("[2] Login as Card Holder");
-                    Console.WriteLine("[3] Exit");
-                    Console.Write("Enter your choice: ");
-                    string mainChoice = Console.ReadLine();
+                    Console.Write("Student Name: ");
+                    string name = Console.ReadLine() ?? "";
 
-                    if (mainChoice == "1")
-                    {
-                        AdminMenu(admin, manager);
-                    }
-                    else if (mainChoice == "2")
-                    {
-                        CardHolderLoginScreen(manager);
-                    }
-                    else if (mainChoice == "3")
-                    {
-                        break;
-                    }
-                }
+                    Console.Write("Registered courses (comma separated : CPE100,SE400): ");
+                    string line = Console.ReadLine() ?? "";
+                    var courses = line.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(x => x.Trim())
+                                      .Where(x => x.Length > 0)
+                                      .ToList();
 
-
-            }
-            static void AdminMenu(Administrator admin, systemManger manager)
-            {
-                while (true)
-                {
-                    Console.WriteLine("\n--- Administrator Options Menu ---");
-                    Console.WriteLine("[1] Issue card");
-                    Console.WriteLine("[2] Block card");
-                    Console.WriteLine("[3] Unblock card");
-                    Console.WriteLine("[4] View all cards");
-                    Console.WriteLine("[5] View all transactions");
-                    Console.WriteLine("[6] Back To Main Login Screen");
-                    Console.Write("Choice: ");
-                    string choice = Console.ReadLine();
-
-                    if (choice == "1")
+                    Manager.SaveStudent(new StudentData
                     {
-                        Console.Write("Card Number: "); string cn = Console.ReadLine();
-                        Console.Write("Type (Student/Faculty): "); string ct = Console.ReadLine();
-                        Console.Write("User ID: "); string uid = Console.ReadLine();
-                        admin.IssueCard(cn, ct, uid);
-                        Console.WriteLine("Card Issued Successfully!");
-                    }
-                    else if (choice == "2")
-                    {
-                        //  Use Case 10 "unblock"
-                        var unblocked = manager.GetCards().Where(c => c.Status == "unblocked").ToList();
-                        unblocked.ForEach(c => Console.WriteLine(c.GetDetails()));
-                        Console.Write("Enter Card Number to Block: ");
-                        admin.BlockCard(Console.ReadLine());
-                    }
-                    else if (choice == "3")
-                    {
-                        // Use Case 11 "block"
-                        var blocked = manager.GetCards().Where(c => c.Status == "blocked").ToList();
-                        blocked.ForEach(c => Console.WriteLine(c.GetDetails()));
-                        Console.Write("Enter Card Number to Unblock: ");
-                        admin.UnblockCard(Console.ReadLine());
-                    }
-                    else if (choice == "4")
-                    {
-                        admin.ViewAllCards().ForEach(c => Console.WriteLine(c.GetDetails()));
-                    }
-                    else if (choice == "5")
-                    {
-                        admin.ViewAllTransactions().ForEach(t => Console.WriteLine(t.GetDetails()));
-                    }
-                    else if (choice == "6") break;
+                        UserId = uid,
+                        Name = name,
+                        RegisteredCourses = courses
+                    });
                 }
             }
-
-            // cardHolder login 
-            static void CardHolderLoginScreen(systemManger manager)
+            else if (ct == "faculty member")
             {
-                while (true)
+                var existingFaculty = Manager.FindFaculty(uid);
+                if (existingFaculty == null)
                 {
-                    Console.WriteLine("\n--- Card Holders' Login Screen ---");
-                    Console.WriteLine("[1] Login As Student");
-                    Console.WriteLine("[2] Login as Faculty Member");
-                    Console.WriteLine("[3] Back To Main Login Screen");
-                    Console.Write("Choice: ");
-                    string typeChoice = Console.ReadLine();
+                    Console.Write("Faculty Name: ");
+                    string name = Console.ReadLine() ?? "";
 
-                    if (typeChoice == "3") break;
+                    Console.Write("Taught courses (comma separated : CPE100,CIS300): ");
+                    string line = Console.ReadLine() ?? "";
+                    var courses = line.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(x => x.Trim())
+                                      .Where(x => x.Length > 0)
+                                      .ToList();
 
-                    Console.Write("Enter Card Number: ");
-                    string cardNum = Console.ReadLine();
-                    var card = manager.GetCards().FirstOrDefault(c => c.CardNumber == cardNum);
-
-                    //   (Limitations) UI Guidelines Page 3
-                    if (card == null) { Console.WriteLine("Invalid card number!"); continue; }
-                    if (card.Status == "blocked") { Console.WriteLine("This card is blocked!"); continue; }
-
-                    if (typeChoice == "1" && card.CardType == "Student")
+                    Manager.SaveFaculty(new FacultyData
                     {
-                        Student stdUser = new Student(card.UserId, "Student Name", card, manager);
-                        StudentMenu(stdUser);
-                    }
-                    else if (typeChoice == "2" && card.CardType == "Faculty")
-                    {
-                        FacultyMember facUser = new FacultyMember(card.UserId, "Faculty Name", card, manager);
-                        FacultyMenu(facUser);
-                    }
-                    else { Console.WriteLine("Card type mismatch!"); }
+                        UserId = uid,
+                        Name = name,
+                        TaughtCourses = courses
+                    });
                 }
             }
-
-            
-            static void StudentMenu(Student student)
+            else
             {
-                while (true)
-                {
-                    Console.WriteLine($"\n--- Welcome Student {student.UserId} ---");
-                    Console.WriteLine("[1] Recharge card");
-                    Console.WriteLine("[2] Record lecture attendance");
-                    Console.WriteLine("[3] Pay for cafeteria");
-                    Console.WriteLine("[4] Pay for bus ride");
-                    Console.WriteLine("[5] View transaction history");
-                    Console.WriteLine("[6] Logout");
-                    Console.Write("Choice: ");
-                    string choice = Console.ReadLine();
-
-                    if (choice == "1")
-                    {
-                        Console.Write("Enter Amount: "); double amt = Convert.ToDouble(Console.ReadLine());
-                        Console.Write("Enter Transaction ID: "); string tid = Console.ReadLine();
-                        student.RechargeCard(amt, tid);
-                    }
-                    else if (choice == "2")
-                    {
-                        Console.Write("Enter Course ID: "); string cid = Console.ReadLine();
-                        Console.Write("Enter Date (yyyy-MM-dd): "); string dt = Console.ReadLine();
-                        student.RecordLectureAttendance(cid, dt);
-                    }
-                    else if (choice == "3") student.PayforCafteria(DateTime.Now.ToString("yyyy-MM-dd"));
-                    else if (choice == "4") student.PayforBus(DateTime.Now.ToString("yyyy-MM-dd"));
-                    else if (choice == "5") student.ViewTransactionHistory();
-                    else if (choice == "6") break;
-                }
+                Console.WriteLine("Invalid Card Type!");
+                return;
             }
 
-            
-            static void FacultyMenu(FacultyMember faculty)
+            //  Save the card
+            Manager.SaveCard(new Card
             {
-                while (true)
-                {
-                    Console.WriteLine($"\n--- Welcome Faculty Member {faculty.UserId} ---");
-                    Console.WriteLine("[1] Recharge card");
-                    Console.WriteLine("[2] Access car parking");
-                    Console.WriteLine("[3] Generate attendance report");
-                    Console.WriteLine("[4] Logout");
-                    Console.Write("Choice: ");
-                    string choice = Console.ReadLine();
+                CardNumber = cn,
+                CardType = ct,
+                Balance = 50,
+                Status = "unblocked",
+                UserId = uid
+            });
 
-                    if (choice == "1")
-                    {
-                        Console.Write("Amount: "); double amt = Convert.ToDouble(Console.ReadLine());
-                        Console.Write("T-ID: "); string tid = Console.ReadLine();
-                        faculty.RechargeCard(amt, tid);
-                    }
-                    else if (choice == "2")
-                    {
-                        Console.Write("Hours: "); int h = Convert.ToInt32(Console.ReadLine());
-                        Console.Write("T-ID: "); string tid = Console.ReadLine();
-                        faculty.AccessCarParking(h, tid);
-                    }
-                    else if (choice == "3")
-                    {
-                        Console.Write("Course ID: "); string cid = Console.ReadLine();
-                        Console.Write("Date: "); string dt = Console.ReadLine();
-                        var report = faculty.GenerateAttendanceReport(cid, dt);
-                        Console.WriteLine("Attendees: " + string.Join(", ", report));
-                    }
-                    else if (choice == "4") break;
+            Console.WriteLine("Card Issued Successfully!");
+        }
+
+        public void BlockCard()
+        {
+            var unblocked = Manager.GetCards().Where(c => c.Status == "unblocked").ToList();
+            unblocked.ForEach(c => Console.WriteLine(c.GetDetails()));
+
+            Console.Write("Enter Card Number to Block: ");
+            string cn = Console.ReadLine() ?? "";
+
+            var card = Manager.GetCards().FirstOrDefault(c => c.CardNumber == cn);
+            if (card == null) return;
+
+            card.Status = "blocked";
+            Manager.SaveCard(card);
+        }
+
+        public void UnblockCard()
+        {
+            var blocked = Manager.GetCards().Where(c => c.Status == "blocked").ToList();
+            blocked.ForEach(c => Console.WriteLine(c.GetDetails()));
+
+            Console.Write("Enter Card Number to Unblock: ");
+            string cn = Console.ReadLine() ?? "";
+
+            var card = Manager.GetCards().FirstOrDefault(c => c.CardNumber == cn);
+            if (card == null) return;
+
+            card.Status = "unblocked";
+            Manager.SaveCard(card);
+        }
+
+        public void ViewAllCards()
+        {
+            Manager.GetCards()
+                .OrderBy(c => c.CardType)
+                .ToList()
+                .ForEach(c => Console.WriteLine(c.GetDetails()));
+        }
+
+        public void ViewAllTransactions()
+        {
+            Manager.GetTransactions()
+                .OrderBy(t => t.TransactionType)
+                .ToList()
+                .ForEach(t => Console.WriteLine(t.GetDetails()));
+        }
+    }
+
+    // (UI)
+    internal class Program
+    {
+        static void Main(string[] args)
+        {
+            var manager = new SystemManager();
+            var admin = new Administrator(manager);
+
+            while (true)
+            {
+                Console.Clear();
+                Console.WriteLine("=== Smart University Card System ===");
+                Console.WriteLine("[1] Login As Admin");
+                Console.WriteLine("[2] Login as Card Holder");
+                Console.WriteLine("[3] Exit");
+                Console.Write("Enter your choice: ");
+                string mainChoice = Console.ReadLine() ?? "";
+
+                if (mainChoice == "1") AdminMenu(admin);
+                else if (mainChoice == "2") CardHolderLoginScreen(manager);
+                else if (mainChoice == "3") break;
+            }
+        }
+
+        static void AdminMenu(Administrator admin)
+        {
+            while (true)
+            {
+                Console.WriteLine("\n--- Administrator Options Menu ---");
+                Console.WriteLine("[1] Issue card");
+                Console.WriteLine("[2] Block card");
+                Console.WriteLine("[3] Unblock card");
+                Console.WriteLine("[4] View all cards");
+                Console.WriteLine("[5] View all transactions");
+                Console.WriteLine("[6] Back To Main Login Screen");
+                Console.Write("Choice: ");
+                string choice = Console.ReadLine() ?? "";
+
+                if (choice == "1") admin.IssueCard();
+                else if (choice == "2") admin.BlockCard();
+                else if (choice == "3") admin.UnblockCard();
+                else if (choice == "4") admin.ViewAllCards();
+                else if (choice == "5") admin.ViewAllTransactions();
+                else if (choice == "6") break;
+            }
+        }
+
+        static void CardHolderLoginScreen(SystemManager manager)
+        {
+            while (true)
+            {
+                Console.WriteLine("\n--- Card Holders’ Login Screen ---");
+                Console.WriteLine("[1] Login As Student");
+                Console.WriteLine("[2] Login as Faculty Member");
+                Console.WriteLine("[3] Back To Main Login Screen");
+                Console.Write("Choice: ");
+                string typeChoice = Console.ReadLine() ?? "";
+
+                if (typeChoice == "3") break;
+
+                Console.Write("Enter Card Number: ");
+                string cardNum = Console.ReadLine() ?? "";
+
+                var card = manager.GetCards().FirstOrDefault(c => c.CardNumber == cardNum);
+
+                // UI Guidelines limitations: invalid card + blocked card + insufficient balance
+                if (card == null)
+                {
+                    Console.WriteLine("Invalid card number!");
+                    continue;
                 }
+                if (card.Status == "blocked")
+                {
+                    Console.WriteLine("This card is blocked!");
+                    continue;
+                }
+
+                if (typeChoice == "1" && card.CardType == "student")
+                {
+                    var sd = manager.FindStudent(card.UserId);
+                    if (sd == null) { Console.WriteLine("Student data not found!"); continue; }
+
+                    var stdUser = new Student(sd.UserId, sd.Name, card, manager, sd.RegisteredCourses);
+                    StudentMenu(stdUser);
+                }
+                else if (typeChoice == "2" && card.CardType == "faculty member")
+                {
+                    var fd = manager.FindFaculty(card.UserId);
+                    if (fd == null) { Console.WriteLine("Faculty data not found!"); continue; }
+
+                    var facUser = new FacultyMember(fd.UserId, fd.Name, card, manager, fd.TaughtCourses);
+                    FacultyMenu(facUser);
+                }
+                else
+                {
+                    Console.WriteLine("Card type mismatch!");
+                }
+            }
+        }
+
+        static void StudentMenu(Student student)
+        {
+            while (true)
+            {
+                Console.WriteLine($"\n--- Welcome Student {student.Name} ({student.UserId}) ---");
+                Console.WriteLine("[1] Recharge card");
+                Console.WriteLine("[2] Record lecture attendance");
+                Console.WriteLine("[3] Pay for cafeteria");
+                Console.WriteLine("[4] Pay for bus ride");
+                Console.WriteLine("[5] View transaction history");
+                Console.WriteLine("[6] Logout");
+                Console.Write("Choice: ");
+                string choice = Console.ReadLine() ?? "";
+
+                if (choice == "1") student.RechargeCard();
+                else if (choice == "2") student.RecordLectureAttendance();
+                else if (choice == "3") student.PayForCafeteria();
+                else if (choice == "4") student.PayForBusRide();
+                else if (choice == "5") student.ViewTransactionHistory();
+                else if (choice == "6") break;
+            }
+        }
+
+        static void FacultyMenu(FacultyMember faculty)
+        {
+            while (true)
+            {
+                Console.WriteLine($"\n--- Welcome Faculty Member {faculty.Name} ({faculty.UserId}) ---");
+                Console.WriteLine("[1] Recharge card");
+                Console.WriteLine("[2] Access car parking");
+                Console.WriteLine("[3] Generate attendance report");
+                Console.WriteLine("[4] Logout");
+                Console.Write("Choice: ");
+                string choice = Console.ReadLine() ?? "";
+
+                if (choice == "1") faculty.RechargeCard();
+                else if (choice == "2") faculty.AccessCarParking();
+                else if (choice == "3") faculty.GenerateAttendanceReport();
+                else if (choice == "4") break;
             }
         }
     }
